@@ -1,0 +1,619 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ───────────── ENUMS ─────────────
+enum UserRole {
+  OWNER
+  ADMIN
+  DENTIST
+  RECEPTION
+}
+enum Sex {
+  M
+  F
+  O
+}
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+enum ConsentType {
+  LGPD
+  WHATSAPP
+  IMAGE
+}
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+enum ConfirmationStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+enum AppointmentSource {
+  MANUAL
+  WHATSAPP
+  ONLINE
+}
+enum EntryType {
+  EVOLUTION
+  PRESCRIPTION
+  CERTIFICATE
+  ADDENDUM
+}
+enum SignatureMethod {
+  INTERNAL
+  ICP_BRASIL
+  PROVIDER
+}
+enum PlanStatus {
+  DRAFT
+  PRESENTED
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+enum PlanItemStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+enum DocumentKind {
+  XRAY
+  PHOTO
+  EXAM
+  CONSENT_FORM
+  CONTRACT
+  OTHER
+}
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+enum TransactionStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+enum PaymentMethod {
+  PIX
+  CARD
+  CASH
+  BOLETO
+  TRANSFER
+}
+enum MessageDirection {
+  OUT
+  IN
+}
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  FINISHED
+}
+enum MessageStrategy {
+  AI
+  TEMPLATE
+}
+enum SubscriptionPlan {
+  TRIAL
+  BASIC
+  PRO
+}
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+// ───────────── CLÍNICA / EQUIPE ─────────────
+model Clinic {
+  id                    String   @id @default(uuid()) @db.Uuid
+  name                  String
+  cnpj                  String?
+  email                 String
+  phone                 String?
+  address               Json?
+  timezone              String   @default("America/Sao_Paulo")
+  slotMinutes           Int      @default(30)
+  reminderHoursBefore   Int[]    @default([24, 2])
+  whatsappEnabled       Boolean  @default(false)
+  reactivationAfterDays Int      @default(180)
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+
+  businessHours BusinessHour[]
+  users         User[]
+  patients      Patient[]
+  procedures    Procedure[]
+  appointments  Appointment[]
+  records       ClinicalRecord[]
+  entries       ClinicalEntry[]
+  plans         TreatmentPlan[]
+  documents     Document[]
+  categories    FinanceCategory[]
+  transactions  Transaction[]
+  templates     WhatsappTemplate[]
+  messages      WhatsappMessage[]
+  campaigns     ReactivationCampaign[]
+  subscription  Subscription?
+  auditLogs     AuditLog[]
+
+  @@map("clinics")
+}
+
+model BusinessHour {
+  id        String @id @default(uuid()) @db.Uuid
+  clinicId  String @db.Uuid
+  weekday   Int    // 0 = domingo ... 6 = sábado
+  startTime String // "08:00"
+  endTime   String // "18:00"
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, weekday])
+  @@map("business_hours")
+}
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  clinicId           String    @db.Uuid
+  name               String
+  email              String    @unique
+  passwordHash       String
+  role               UserRole
+  cro                String?   // só dentistas
+  specialty          String?
+  color              String?   // cor na agenda
+  defaultSlotMinutes Int?
+  isActive           Boolean   @default(true)
+  lastLoginAt        DateTime? @db.Timestamptz(6)
+  deletedAt          DateTime? @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(6)
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  refreshTokens RefreshToken[]
+  appointments  Appointment[]   @relation("AppointmentProfessional")
+  entries       ClinicalEntry[] @relation("EntryProfessional")
+  plans         TreatmentPlan[] @relation("PlanProfessional")
+
+  @@index([clinicId, role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  family     String    @db.Uuid     // detecta reuso de token
+  expiresAt  DateTime  @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ───────────── PACIENTES ─────────────
+model Patient {
+  id                   String        @id @default(uuid()) @db.Uuid
+  clinicId             String        @db.Uuid
+  name                 String
+  nameNormalized       String        // minúsculo, sem acento (busca)
+  cpfEncrypted         String?
+  cpfHash              String?       // HMAC do CPF (unicidade/busca)
+  birthDate            DateTime?     @db.Date
+  sex                  Sex?
+  phone                String?
+  whatsapp             String?
+  email                String?
+  address              Json?
+  guardianName         String?
+  guardianPhone        String?
+  guardianRelationship String?
+  insuranceName        String?
+  insuranceCard        String?
+  status               PatientStatus @default(ACTIVE)
+  firstVisitAt         DateTime?     @db.Timestamptz(6)
+  lastVisitAt          DateTime?     @db.Timestamptz(6)  // alimenta a reativação
+  nextAppointmentAt    DateTime?     @db.Timestamptz(6)
+  tags                 String[]
+  deletedAt            DateTime?     @db.Timestamptz(6)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(6)
+
+  clinic       Clinic           @relation(fields: [clinicId], references: [id])
+  consents     PatientConsent[]
+  appointments Appointment[]
+  record       ClinicalRecord?
+  entries      ClinicalEntry[]
+  plans        TreatmentPlan[]
+  documents    Document[]
+  transactions Transaction[]
+  messages     WhatsappMessage[]
+
+  @@unique([clinicId, cpfHash])   // NULLs não conflitam entre si no Postgres
+  @@index([clinicId, nameNormalized])
+  @@index([clinicId, status, lastVisitAt])
+  @@map("patients")
+}
+
+model PatientConsent {
+  id        String      @id @default(uuid()) @db.Uuid
+  patientId String      @db.Uuid
+  type      ConsentType
+  grantedAt DateTime    @db.Timestamptz(6)
+  revokedAt DateTime?   @db.Timestamptz(6)
+  ip        String?
+  version   String      // versão do termo aceito
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, type])
+  @@map("patient_consents")
+}
+
+// ───────────── PROCEDIMENTOS / AGENDA ─────────────
+model Procedure {
+  id              String  @id @default(uuid()) @db.Uuid
+  clinicId        String  @db.Uuid
+  name            String
+  code            String?
+  category        String?
+  priceCents      Int
+  durationMinutes Int     @default(30)
+  isActive        Boolean @default(true)
+
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id])
+  appointments AppointmentProcedure[]
+  planItems    TreatmentPlanItem[]
+
+  @@index([clinicId, isActive])
+  @@map("procedures")
+}
+
+model Appointment {
+  id                 String             @id @default(uuid()) @db.Uuid
+  clinicId           String             @db.Uuid
+  patientId          String             @db.Uuid
+  professionalId     String             @db.Uuid
+  startAt            DateTime           @db.Timestamptz(6)
+  endAt              DateTime           @db.Timestamptz(6)
+  status             AppointmentStatus  @default(SCHEDULED)
+  confirmationStatus ConfirmationStatus @default(PENDING)
+  confirmedAt        DateTime?          @db.Timestamptz(6)
+  confirmationChannel String?
+  notes              String?
+  source             AppointmentSource  @default(MANUAL)
+  cancelReason       String?
+  createdById        String?            @db.Uuid
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id])
+  patient      Patient                @relation(fields: [patientId], references: [id])
+  professional User                   @relation("AppointmentProfessional", fields: [professionalId], references: [id])
+  procedures   AppointmentProcedure[]
+  entries      ClinicalEntry[]
+  transactions Transaction[]
+  messages     WhatsappMessage[]
+
+  @@index([clinicId, professionalId, startAt])
+  @@index([clinicId, startAt, status])
+  @@index([clinicId, patientId, startAt(sort: Desc)])
+  @@map("appointments")
+}
+
+model AppointmentProcedure {
+  appointmentId String @db.Uuid
+  procedureId   String @db.Uuid
+  priceCents    Int    // preço no momento da consulta (histórico)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  procedure   Procedure   @relation(fields: [procedureId], references: [id])
+
+  @@id([appointmentId, procedureId])
+  @@map("appointment_procedures")
+}
+
+// ───────────── PRONTUÁRIO ─────────────
+model ClinicalRecord {
+  id                 String   @id @default(uuid()) @db.Uuid
+  clinicId           String   @db.Uuid
+  patientId          String   @unique @db.Uuid
+  anamnesisEncrypted String?  // JSON da anamnese, criptografado na aplicação
+  updatedById        String?  @db.Uuid
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+
+  clinic  Clinic            @relation(fields: [clinicId], references: [id])
+  patient Patient           @relation(fields: [patientId], references: [id])
+  teeth   ToothCondition[]
+
+  @@index([clinicId])
+  @@map("clinical_records")
+}
+
+model ToothCondition {
+  id        String   @id @default(uuid()) @db.Uuid
+  recordId  String   @db.Uuid
+  tooth     Int      // 11–48 (notação FDI)
+  surfaces  String[] // ["O","M","D"...]
+  condition String   // cárie, restauração, ausente...
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  record ClinicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId, tooth])
+  @@map("tooth_conditions")
+}
+
+model ClinicalEntry {
+  id                  String           @id @default(uuid()) @db.Uuid
+  clinicId            String           @db.Uuid
+  patientId           String           @db.Uuid
+  appointmentId       String?          @db.Uuid
+  professionalId      String           @db.Uuid
+  type                EntryType
+  contentEncrypted    String
+  teeth               Int[]
+  // assinatura
+  signedAt            DateTime?        @db.Timestamptz(6)
+  signedById          String?          @db.Uuid
+  contentHash         String?          // SHA-256 do conteúdo no momento da assinatura
+  signatureMethod     SignatureMethod?
+  signatureIp         String?
+  signatureUserAgent  String?
+  providerEnvelopeId  String?
+  // adendo: entrada assinada não se edita
+  addendumOfId        String?          @db.Uuid
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  patient       Patient         @relation(fields: [patientId], references: [id])
+  appointment   Appointment?    @relation(fields: [appointmentId], references: [id])
+  professional  User            @relation("EntryProfessional", fields: [professionalId], references: [id])
+  addendumOf    ClinicalEntry?  @relation("Addendum", fields: [addendumOfId], references: [id])
+  addenda       ClinicalEntry[] @relation("Addendum")
+
+  @@index([clinicId, patientId, createdAt(sort: Desc)])
+  @@map("clinical_entries")
+}
+
+model TreatmentPlan {
+  id             String     @id @default(uuid()) @db.Uuid
+  clinicId       String     @db.Uuid
+  patientId      String     @db.Uuid
+  professionalId String     @db.Uuid
+  status         PlanStatus @default(DRAFT)
+  totalCents     Int        @default(0)
+  approvedAt     DateTime?  @db.Timestamptz(6)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(6)
+
+  clinic       Clinic              @relation(fields: [clinicId], references: [id])
+  patient      Patient             @relation(fields: [patientId], references: [id])
+  professional User                @relation("PlanProfessional", fields: [professionalId], references: [id])
+  items        TreatmentPlanItem[]
+  transactions Transaction[]
+
+  @@index([clinicId, patientId])
+  @@map("treatment_plans")
+}
+
+model TreatmentPlanItem {
+  id            String         @id @default(uuid()) @db.Uuid
+  planId        String         @db.Uuid
+  procedureId   String?        @db.Uuid
+  name          String         // cópia do nome (histórico)
+  tooth         Int?
+  quantity      Int            @default(1)
+  unitPriceCents Int
+  discountCents Int            @default(0)
+  status        PlanItemStatus @default(PENDING)
+
+  plan      TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  procedure Procedure?    @relation(fields: [procedureId], references: [id])
+
+  @@index([planId])
+  @@map("treatment_plan_items")
+}
+
+model Document {
+  id           String       @id @default(uuid()) @db.Uuid
+  clinicId     String       @db.Uuid
+  patientId    String       @db.Uuid
+  kind         DocumentKind
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String       @unique   // caminho no Supabase Storage
+  uploadedById String?      @db.Uuid
+  createdAt    DateTime     @default(now()) @db.Timestamptz(6)
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([clinicId, patientId])
+  @@map("documents")
+}
+
+// ───────────── FINANCEIRO ─────────────
+model FinanceCategory {
+  id       String          @id @default(uuid()) @db.Uuid
+  clinicId String          @db.Uuid
+  name     String
+  type     TransactionType
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  transactions Transaction[]
+
+  @@unique([clinicId, name, type])
+  @@map("finance_categories")
+}
+
+model Transaction {
+  id                 String            @id @default(uuid()) @db.Uuid
+  clinicId           String            @db.Uuid
+  type               TransactionType
+  categoryId         String            @db.Uuid
+  description        String
+  amountCents        Int
+  dueDate            DateTime          @db.Date
+  paidAt             DateTime?         @db.Timestamptz(6)
+  status             TransactionStatus @default(PENDING)
+  method             PaymentMethod?
+  patientId          String?           @db.Uuid
+  appointmentId      String?           @db.Uuid
+  treatmentPlanId    String?           @db.Uuid
+  installmentNumber  Int?
+  installmentTotal   Int?
+  installmentGroupId String?           @db.Uuid
+  createdById        String?           @db.Uuid
+  createdAt          DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(6)
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  category      FinanceCategory @relation(fields: [categoryId], references: [id])
+  patient       Patient?        @relation(fields: [patientId], references: [id])
+  appointment   Appointment?    @relation(fields: [appointmentId], references: [id])
+  treatmentPlan TreatmentPlan?  @relation(fields: [treatmentPlanId], references: [id])
+
+  @@index([clinicId, status, dueDate])
+  @@index([clinicId, paidAt])
+  @@map("transactions")
+}
+
+// ───────────── WHATSAPP / REATIVAÇÃO ─────────────
+model WhatsappTemplate {
+  id       String  @id @default(uuid()) @db.Uuid
+  clinicId String  @db.Uuid
+  key      String  // "reminder_24h", "reactivation"
+  body     String  // "Olá {{nome}}, ..."
+  isActive Boolean @default(true)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@unique([clinicId, key])
+  @@map("whatsapp_templates")
+}
+
+model WhatsappMessage {
+  id                String           @id @default(uuid()) @db.Uuid
+  clinicId          String           @db.Uuid
+  patientId         String           @db.Uuid
+  appointmentId     String?          @db.Uuid
+  campaignId        String?          @db.Uuid
+  direction         MessageDirection
+  templateKey       String?
+  body              String
+  status            MessageStatus    @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  scheduledFor      DateTime         @db.Timestamptz(6)
+  sentAt            DateTime?        @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
+
+  clinic      Clinic                @relation(fields: [clinicId], references: [id])
+  patient     Patient               @relation(fields: [patientId], references: [id])
+  appointment Appointment?          @relation(fields: [appointmentId], references: [id])
+  campaign    ReactivationCampaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([clinicId, status, scheduledFor])   // fila
+  @@index([providerMessageId])
+  @@map("whatsapp_messages")
+}
+
+model ReactivationCampaign {
+  id              String          @id @default(uuid()) @db.Uuid
+  clinicId        String          @db.Uuid
+  name            String
+  inactiveDays    Int
+  tags            String[]
+  strategy        MessageStrategy @default(AI)
+  status          CampaignStatus  @default(DRAFT)
+  statTargeted    Int             @default(0)
+  statSent        Int             @default(0)
+  statReplied     Int             @default(0)
+  statRebooked    Int             @default(0)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+
+  clinic   Clinic            @relation(fields: [clinicId], references: [id])
+  messages WhatsappMessage[]
+
+  @@index([clinicId, status])
+  @@map("reactivation_campaigns")
+}
+
+// ───────────── ASSINATURA / AUDITORIA ─────────────
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Uuid
+  clinicId           String             @unique @db.Uuid
+  plan               SubscriptionPlan   @default(TRIAL)
+  status             SubscriptionStatus @default(TRIALING)
+  trialEndsAt        DateTime?          @db.Timestamptz(6)  // cadastro + 14 dias
+  currentPeriodEnd   DateTime?          @db.Timestamptz(6)
+  externalCustomerId String?
+  maxUsers           Int                @default(3)
+  maxPatients        Int                @default(500)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  clinicId     String   @db.Uuid
+  userId       String?  @db.Uuid
+  action       String   // "patient.read", "record.update"
+  resourceType String
+  resourceId   String?
+  ip           String?
+  userAgent    String?
+  diff         Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId, createdAt(sort: Desc)])
+  @@index([clinicId, resourceType, resourceId])
+  @@map("audit_logs")
+}

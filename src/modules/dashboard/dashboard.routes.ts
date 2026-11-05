@@ -1,1 +1,7 @@
-export {};
+import { Router } from "express";
+import { dashboardSummaryController } from "./dashboard.controller";
+
+const router = Router();
+router.get("/summary", dashboardSummaryController);
+
+export { router as dashboardRoutes };

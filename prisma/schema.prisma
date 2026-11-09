@@ -190,6 +190,22 @@ model User {
   id                 String    @id @default(uuid()) @db.Uuid
   clinicId           String    @db.Uuid
   name               String
+  brandName          String?
+  title              String?
+  subtitle           String?
+  fullName           String?
+  birthDate          DateTime? @db.Date
+  document           String?
+  phone              String?
+  termsLabel         String?
+  terms              Json?
+  termsConjunction   String?
+  privacy            Json?
+  submitLabel        String?
+  loginPrompt        String?
+  login              String?
+  copyright          String?
+  securityNote       String?
   email              String    @unique
   passwordHash       String
   role               UserRole

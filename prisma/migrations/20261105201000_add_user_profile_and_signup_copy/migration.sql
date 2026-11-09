@@ -1,0 +1,17 @@
+ALTER TABLE "users"
+  ADD COLUMN "brandName" TEXT,
+  ADD COLUMN "title" TEXT,
+  ADD COLUMN "subtitle" TEXT,
+  ADD COLUMN "fullName" TEXT,
+  ADD COLUMN "birthDate" DATE,
+  ADD COLUMN "document" TEXT,
+  ADD COLUMN "phone" TEXT,
+  ADD COLUMN "termsLabel" TEXT,
+  ADD COLUMN "terms" JSONB,
+  ADD COLUMN "termsConjunction" TEXT,
+  ADD COLUMN "privacy" JSONB,
+  ADD COLUMN "submitLabel" TEXT,
+  ADD COLUMN "loginPrompt" TEXT,
+  ADD COLUMN "login" TEXT,
+  ADD COLUMN "copyright" TEXT,
+  ADD COLUMN "securityNote" TEXT;

@@ -213,6 +213,57 @@ padrão `1` e `25` e limite máximo de 100 itens por página. A resposta contém
 `data`, `page`, `pageSize` e `total`. Criações retornam `201`; exclusões bem
 sucedidas retornam `204`.
 
+### Usuários
+
+`/api/users` permite listar e consultar usuários da clínica (`GET`), criar
+(`POST`), atualizar parcialmente (`PATCH /:id`) e excluir (`DELETE /:id`).
+Apenas `OWNER` e `ADMIN` podem acessar o recurso; a exclusão é lógica e usuários
+excluídos deixam de aparecer nas consultas. O campo `password` é obrigatório na
+criação (12 a 128 caracteres), opcional na atualização, armazenado como hash e
+nunca retornado pela API. Os papéis que podem ser atribuídos são `ADMIN`,
+`DENTIST` e `RECEPTION`; `OWNER` é reservado ao cadastro da clínica.
+
+Exemplo de criação:
+
+```http
+POST /api/users
+Authorization: ******
+Content-Type: application/json
+
+{
+  "brandName": "Smile Sync",
+  "title": "Bem-vindo",
+  "subtitle": "Acesse sua conta",
+  "fullName": "João da Silva",
+  "birthDate": "1990-05-20",
+  "document": "12345678900",
+  "phone": "+5511999999999",
+  "email": "joao@example.com",
+  "password": "uma-senha-segura-123",
+  "termsLabel": "Li e aceito",
+  "terms": { "version": "1", "content": "Termos de uso" },
+  "termsConjunction": "e",
+  "privacy": { "version": "1", "content": "Política de privacidade" },
+  "submitLabel": "Criar conta",
+  "loginPrompt": "Já possui uma conta?",
+  "login": "Entrar",
+  "copyright": "© Smile Sync",
+  "securityNote": "Seus dados são protegidos",
+  "role": "DENTIST"
+}
+```
+
+Na atualização, envie somente os campos a alterar; para trocar a senha,
+inclua `password` no corpo do `PATCH`.
+
+A tabela `users` também contém `brandName`, `title`, `subtitle`, `fullName`,
+`birthDate`, `document`, `phone`, `termsLabel`, `terms`, `termsConjunction`,
+`privacy`, `submitLabel`, `loginPrompt`, `login`, `copyright` e `securityNote`.
+`birthDate` é armazenado como `DATE`; `terms` e `privacy` são objetos JSONB.
+O documento pessoal é criptografado no banco. O campo de entrada `password`
+continua sendo armazenado somente como hash em `passwordHash`. Os novos campos
+são opcionais para manter compatibilidade com usuários existentes.
+
 Exemplo de listagem:
 
 ```http

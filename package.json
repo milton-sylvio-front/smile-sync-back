@@ -13,6 +13,11 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "@supabase/middleware": {
+      "std-env": "3.10.0"
+    }
+  },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@supabase/middleware": "^1.0.0",

@@ -1,9 +1,9 @@
 import { createServer } from "node:http";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "./app";
 
-async function preflight(origin: string): Promise<Response> {
-  const server = createServer(app);
+async function preflight(origin: string, application = app): Promise<Response> {
+  const server = createServer(application);
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -32,6 +32,10 @@ async function preflight(origin: string): Promise<Response> {
 }
 
 describe("CORS", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("allows the local frontend to preflight the registration endpoint", async () => {
     const response = await preflight("http://localhost:3000");
 
@@ -45,6 +49,22 @@ describe("CORS", () => {
 
   it("allows the production frontend when CORS_ORIGINS is unset", async () => {
     const response = await preflight("https://smile-sync-front.vercel.app");
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://smile-sync-front.vercel.app",
+    );
+  });
+
+  it("allows the production frontend when CORS_ORIGINS is configured", async () => {
+    vi.stubEnv("CORS_ORIGINS", "http://localhost:3000");
+    vi.resetModules();
+    const { app: configuredApp } = await import("./app.js");
+
+    const response = await preflight(
+      "https://smile-sync-front.vercel.app",
+      configuredApp,
+    );
 
     expect(response.status).toBe(204);
     expect(response.headers.get("access-control-allow-origin")).toBe(

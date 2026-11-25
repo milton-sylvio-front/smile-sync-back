@@ -8,15 +8,17 @@ import { routes } from "./routes";
 
 export const app = express();
 
-const allowedOrigins = (
-  process.env.CORS_ORIGINS ??
-  "https://smile-sync-front.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
-)
+const allowedOrigins = new Set([
+  "https://smile-sync-front.vercel.app",
+  ...(process.env.CORS_ORIGINS ??
+    "http://localhost:3000,http://127.0.0.1:3000"
+  )
   .split(",")
   .map((origin) => origin.trim())
-  .filter(Boolean);
+  .filter(Boolean),
+]);
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: [...allowedOrigins] }));
 app.use(express.json());
 app.get("/api-docs.json", (_req, res) => {
   res.json(openApiSpec);

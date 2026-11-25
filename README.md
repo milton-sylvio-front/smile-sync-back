@@ -55,7 +55,7 @@ Vitest podem não funcionar em versões antigas do Node.
 
    ```dotenv
    PORT=3333
-   CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+   CORS_ORIGINS=https://smile-sync-front.vercel.app,http://localhost:3000,http://127.0.0.1:3000
 
    # Conexão PostgreSQL usada pela API para executar consultas no Supabase.
    SUPABASE_DB_URL="postgresql://postgres:<senha>@<host>:5432/postgres?sslmode=require"

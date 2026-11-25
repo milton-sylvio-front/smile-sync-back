@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
+import type {} from "./shared/types/express";
 import { errorHandler } from "./shared/middlewares/error-handler";
 import { openApiSpec } from "./openapi";
 import { routes } from "./routes";

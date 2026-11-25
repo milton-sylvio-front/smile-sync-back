@@ -1,7 +1,6 @@
 import { config } from "dotenv";
 
 config();
-import { connectToSupabase } from "./database/supabase";
 import { app } from "./app";
 
 const PORT = process.env.PORT || 3333;
@@ -30,15 +29,9 @@ async function startServer(): Promise<void> {
 
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
-
-  try {
-    await connectToSupabase();
-  } catch (error: unknown) {
-    console.error("A API está no ar, mas a verificação com o Supabase falhou:", error);
-  }
 }
 
 void startServer().catch((error: unknown) => {
-  console.error("Não foi possível iniciar a API com a conexão Supabase:", error);
+  console.error("Não foi possível iniciar a API:", error);
   process.exitCode = 1;
 });

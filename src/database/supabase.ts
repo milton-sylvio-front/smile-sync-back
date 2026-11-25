@@ -1,19 +1,31 @@
-import { pipeline } from "@supabase/middleware";
-import {
-  withPostgresAdminClient,
-  type PostgresApi,
-} from "@supabase/server/middleware/postgres-admin";
+import type { PostgresApi } from "@supabase/server/middleware/postgres-admin";
+import { connectionStringForRuntime } from "./connection-string";
 
 const requestUrl = "http://localhost/internal/database";
+
+async function loadDatabaseTools() {
+  const [middleware, postgres] = await Promise.all([
+    import("@supabase/middleware"),
+    import("@supabase/server/middleware/postgres-admin"),
+  ]);
+
+  return {
+    pipeline: middleware.pipeline,
+    withPostgresAdminClient: postgres.withPostgresAdminClient,
+  };
+}
 
 async function runWithPostgres<T>(
   operation: (postgres: PostgresApi) => Promise<T>,
 ): Promise<T> {
-  const connectionString = process.env.SUPABASE_DB_URL;
+  const configuredConnectionString = process.env.SUPABASE_DB_URL;
 
-  if (!connectionString) {
+  if (!configuredConnectionString) {
     throw new Error("A variável SUPABASE_DB_URL não está configurada.");
   }
+
+  const connectionString = connectionStringForRuntime(configuredConnectionString);
+  const { pipeline, withPostgresAdminClient } = await loadDatabaseTools();
 
   let result: T;
   let completed = false;

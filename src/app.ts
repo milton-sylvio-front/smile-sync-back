@@ -35,3 +35,5 @@ app.get("/health", (_req, res) => {
 });
 
 app.use(errorHandler);
+
+export default app;

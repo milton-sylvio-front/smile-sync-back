@@ -16,11 +16,11 @@ export const usersResource: ResourceDefinition = {
   writeRoles: ["OWNER", "ADMIN"],
   fields: {
     name: z.string().trim().min(1).max(160).optional(),
-    brandName: z.string().trim().min(1).max(160),
+    clinicName: z.string().trim().min(1).max(160).nullable().optional(),
     title: z.string().trim().min(1).max(500),
     subtitle: z.string().trim().min(1).max(1000),
     fullName: z.string().trim().min(1).max(160),
-    birthDate: z.coerce.date(),
+    birthDate: z.coerce.date().nullable().optional(),
     document: z.string().trim().min(1).max(255),
     phone: z.string().trim().min(1).max(40),
     email: z.string().trim().email().toLowerCase(),

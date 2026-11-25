@@ -55,6 +55,7 @@ Vitest podem não funcionar em versões antigas do Node.
 
    ```dotenv
    PORT=3333
+   CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
    # Conexão PostgreSQL usada pela API para executar consultas no Supabase.
    SUPABASE_DB_URL="postgresql://postgres:<senha>@<host>:5432/postgres?sslmode=require"
@@ -83,10 +84,11 @@ Vitest podem não funcionar em versões antigas do Node.
    openssl rand -base64 32
    ```
 
-   O valor pode ser usado como `DATA_ENCRYPTION_KEY`. Gere um valor separado
-   para `JWT_SECRET`. **Não altere a chave de criptografia depois de salvar
-   dados clínicos**, pois os dados já gravados dependem dela para serem
-   descriptografados.
+   Use o valor para `DATA_ENCRYPTION_KEY` e gere um valor separado para
+   `JWT_SECRET`. **Não altere a chave de criptografia depois de salvar dados
+   clínicos**, pois os dados já gravados dependem dela para serem
+   descriptografados. O arquivo `.env.example` contém nomes e placeholders,
+   não valores funcionais; configure os valores no `.env` local.
 
    A configuração também contém variáveis de URL e chaves Supabase usadas por
    clientes SDK. Elas não são necessárias para as consultas atuais da API, que
@@ -110,6 +112,9 @@ npm start
 
 Por padrão, a API escuta em `http://localhost:3333`. O valor pode ser alterado
 com `PORT`. A rota de verificação de disponibilidade é `GET /health`.
+As origens permitidas para chamadas do navegador são configuradas em
+`CORS_ORIGINS`, separadas por vírgula. Por padrão, são permitidos
+`http://localhost:3000` e `http://127.0.0.1:3000`.
 
 ## Banco de dados
 
@@ -173,7 +178,7 @@ autenticação, exigem `Authorization: Bearer <token>`.
 |---|---|---|
 | `POST` | `/api/auth/register` | Cria uma clínica e seu primeiro usuário proprietário |
 | `POST` | `/api/auth/login` | Autentica com e-mail e senha |
-| `GET` | `/api/auth/me` | Retorna o identificador, a clínica e o papel do usuário autenticado |
+| `GET` | `/api/auth/me` | Retorna o identificador, a clínica, o nome e o papel do usuário autenticado, lidos do banco |
 
 O token de acesso é JWT assinado com `JWT_SECRET` e expira em 15 minutos. O
 login e o cadastro têm limitação de requisições. O schema contém uma tabela

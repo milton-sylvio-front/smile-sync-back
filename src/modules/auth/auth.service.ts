@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { querySupabase } from "../../database/supabase";
 import { AppError } from "../../shared/errors/app-error";
+import { encryptSensitiveText } from "../../shared/utils/crypto";
 import type { UserRole } from "./auth.model";
 
 interface UserRecord {
@@ -32,9 +33,13 @@ function issueAccessToken(user: UserRecord, secret: string): string {
 }
 
 export async function register(input: {
-  clinicName: string;
+  clinicName?: string;
   name: string;
   email: string;
+  birthDate?: string;
+  document: string;
+  phone: string;
+  termsAccepted: true;
   password: string;
 }): Promise<{ accessToken: string; user: Omit<UserRecord, "passwordHash"> }> {
   const secret = jwtSecret();
@@ -43,27 +48,53 @@ export async function register(input: {
   const userId = randomUUID();
   const result = await querySupabase<UserRecord>(
     `WITH new_clinic AS (
-       INSERT INTO "clinics" ("id", "name", "email")
-       VALUES ($1, $2, $3)
+      INSERT INTO "clinics" ("id", "name", "email", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, NOW(), NOW())
        RETURNING "id"
      )
-     INSERT INTO "users" ("id", "clinicId", "name", "email", "passwordHash", "role")
-     SELECT $4, new_clinic."id", $5, $3, $6, 'OWNER'
+    INSERT INTO "users" ("id", "clinicId", "name", "email", "passwordHash", "role", "clinicName", "birthDate", "document", "phone", "termsAcceptedAt", "createdAt", "updatedAt")
+    SELECT $4, new_clinic."id", $5, $3, $6, 'OWNER', $2, $7::date, $8, $9, NOW(), NOW(), NOW()
      FROM new_clinic
      RETURNING "id", "clinicId", "name", "email", "passwordHash", "role"`,
     [
       clinicId,
-      input.clinicName,
+      input.clinicName ?? input.name,
       input.email,
       userId,
       input.name,
       passwordHash,
+      input.birthDate ?? null,
+      encryptSensitiveText(input.document),
+      input.phone,
     ],
   );
   const user = result[0];
   if (!user) throw new Error("Não foi possível criar a clínica e o usuário.");
   const { passwordHash: _passwordHash, ...safeUser } = user;
   return { accessToken: issueAccessToken(user, secret), user: safeUser };
+}
+
+export async function currentUser(userId: string): Promise<{
+  userId: string;
+  clinicId: string;
+  name: string;
+  role: UserRole;
+}> {
+  const rows = await querySupabase<Pick<UserRecord, "id" | "clinicId" | "name" | "role">>(
+    `SELECT "id", "clinicId", "name", "role"
+     FROM "users"
+     WHERE "id" = $1 AND "isActive" = TRUE AND "deletedAt" IS NULL
+     LIMIT 1`,
+    [userId],
+  );
+  const user = rows[0];
+  if (!user) throw new AppError("Sessão inválida.", 401);
+  return {
+    userId: user.id,
+    clinicId: user.clinicId,
+    name: user.name,
+    role: user.role,
+  };
 }
 
 export async function login(input: {

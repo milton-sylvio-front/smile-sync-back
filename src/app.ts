@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import { errorHandler } from "./shared/middlewares/error-handler";
 import { openApiSpec } from "./openapi";
@@ -6,6 +7,15 @@ import { routes } from "./routes";
 
 export const app = express();
 
+const allowedOrigins = (
+  process.env.CORS_ORIGINS ??
+  "http://localhost:3000,http://127.0.0.1:3000"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 app.get("/api-docs.json", (_req, res) => {
   res.json(openApiSpec);

@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { login, register } from "./auth.service";
+import { currentUser, login, register } from "./auth.service";
 
 export const registerController: RequestHandler = async (req, res, next) => {
   try {
@@ -17,10 +17,10 @@ export const loginController: RequestHandler = async (req, res, next) => {
   }
 };
 
-export const meController: RequestHandler = (req, res) => {
-  res.json({
-    userId: req.auth!.userId,
-    clinicId: req.auth!.clinicId,
-    role: req.auth!.role,
-  });
+export const meController: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await currentUser(req.auth!.userId));
+  } catch (error) {
+    next(error);
+  }
 };

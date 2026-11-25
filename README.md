@@ -113,8 +113,9 @@ npm start
 Por padrão, a API escuta em `http://localhost:3333`. O valor pode ser alterado
 com `PORT`. A rota de verificação de disponibilidade é `GET /health`.
 As origens permitidas para chamadas do navegador são configuradas em
-`CORS_ORIGINS`, separadas por vírgula. Por padrão, são permitidos
-`http://localhost:3000` e `http://127.0.0.1:3000`.
+`CORS_ORIGINS`, separadas por vírgula. Sem essa variável, são permitidos
+`https://smile-sync-front.vercel.app`, `http://localhost:3000` e
+`http://127.0.0.1:3000`.
 
 ## Banco de dados
 

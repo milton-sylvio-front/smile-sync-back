@@ -43,6 +43,15 @@ describe("CORS", () => {
     expect(response.headers.get("access-control-allow-headers")).toContain("content-type");
   });
 
+  it("allows the production frontend when CORS_ORIGINS is unset", async () => {
+    const response = await preflight("https://smile-sync-front.vercel.app");
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://smile-sync-front.vercel.app",
+    );
+  });
+
   it("does not allow an unconfigured origin", async () => {
     const response = await preflight("https://untrusted.example");
 
